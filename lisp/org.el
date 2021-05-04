@@ -7079,7 +7079,7 @@ Return nil before first heading."
     (save-excursion
       (org-back-to-heading t)
       (let ((case-fold-search nil))
-	(looking-at org-complex-heading-regexp)
+	(org-looking-at-fontified org-complex-heading-regexp)
 	(let ((todo (and (not no-todo) (match-string 2)))
 	      (priority (and (not no-priority) (match-string 3)))
 	      (headline (pcase (match-string 4)
@@ -11378,7 +11378,7 @@ as N.")
 
 (defvar org--matcher-tags-todo-only nil)
 
-(defun org-scan-tags (action matcher todo-only &optional start-level)
+(defun org-scan-tags (action matcher todo-only &optional start-level fontify)
   "Scan headline tags with inheritance and produce output ACTION.
 
 ACTION can be `sparse-tree' to produce a sparse tree in the current buffer,
@@ -11396,7 +11396,9 @@ When TODO-ONLY is non-nil, only lines with a TODO keyword are
 included in the output.
 
 START-LEVEL can be a string with asterisks, reducing the scope to
-headlines matching this string."
+headlines matching this string.
+
+When FONTIFY is non-nil, make sure that matches are fontified."
   (require 'org-agenda)
   (let* ((re (concat "^"
 		     (if start-level
@@ -11437,8 +11439,12 @@ headlines matching this string."
 	  ;; Ignore closing parts of inline tasks.
 	  (when (and (fboundp 'org-inlinetask-end-p) (org-inlinetask-end-p))
 	    (throw :skip t))
+          (when (and fontify (bound-and-true-p jit-lock-mode))
+            (save-match-data
+              (jit-lock-fontify-now
+               (match-beginning 0) (match-end 0))))
 	  (setq todo (and (match-end 1) (match-string-no-properties 1)))
-	  (setq tags (and (match-end 4) (org-trim (match-string-no-properties 4))))
+	  (setq tags (and (match-end 4) (org-trim (match-string 4))))
 	  (goto-char (setq lspos (match-beginning 0)))
 	  (setq level (org-reduced-level (org-outline-level))
 		category (org-get-category))
@@ -12378,13 +12384,17 @@ TAGS is a list of strings."
   (if (null tags) ""
     (format ":%s:" (mapconcat #'identity tags ":"))))
 
-(defun org--get-local-tags ()
+(defun org--get-local-tags (&optional fontified)
   "Return list of tags for the current headline.
-Assume point is at the beginning of the headline."
-  (and (looking-at org-tag-line-re)
-       (split-string (match-string-no-properties 2) ":" t)))
+Assume point is at the beginning of the headline.
 
-(defun org-get-tags (&optional pos local)
+The tags are fontified when FONTIFY is non-nil."
+  (and (if fontified
+           (org-looking-at-fontified org-tag-line-re)
+         (looking-at org-tag-line-re))
+       (split-string (match-string 2) ":" t)))
+
+(defun org-get-tags (&optional pos local fontify)
   "Get the list of tags specified in the current headline.
 
 When argument POS is non-nil, retrieve tags for headline at POS.
@@ -12399,7 +12409,9 @@ only the most local tag is returned.
 However, when optional argument LOCAL is non-nil, only return
 tags specified at the headline.
 
-Inherited tags have the `inherited' text property."
+Inherited tags have the `inherited' text property.
+
+The tags are fontified when FONTIFY is non-nil."
   (if (and org-trust-scanner-tags
            (or (not pos) (eq pos (point)))
            (not local))
@@ -12407,11 +12419,11 @@ Inherited tags have the `inherited' text property."
     (org-with-point-at (or pos (point))
       (unless (org-before-first-heading-p)
         (org-back-to-heading t)
-        (let ((ltags (org--get-local-tags)) itags)
+        (let ((ltags (org--get-local-tags fontify)) itags)
           (if (or local (not org-use-tag-inheritance)) ltags
             (while (org-up-heading-safe)
               (setq itags (nconc (mapcar #'org-add-prop-inherited
-					 (org--get-local-tags))
+					 (org--get-local-tags fontify))
 				 itags)))
             (setq itags (append org-file-tags itags))
             (nreverse

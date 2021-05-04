@@ -3984,7 +3984,7 @@ agenda display, configure `org-agenda-finalize-hook'."
 		  (put-text-property (point-at-bol) (point-at-eol)
 				     'tags
 				     (org-with-point-at mrk
-				       (org-get-tags))))))))
+				       (org-get-tags nil nil t))))))))
 	(setq org-agenda-represented-tags nil
 	      org-agenda-represented-categories nil)
 	(when org-agenda-top-headline-filter
@@ -4444,9 +4444,12 @@ items if they have an hour specification like [h]h:mm."
 	    (put-text-property s (1- (point)) 'org-today t))
 	  (setq rtnall
 		(org-agenda-add-time-grid-maybe rtnall ndays todayp))
-	  (when rtnall (insert ;; all entries
-			(org-agenda-finalize-entries rtnall 'agenda)
-			"\n"))
+          (with-silent-modifications
+            ;; Composition property in entries may be self-destructed
+            ;; on change.  Suppress the self-destruction.
+	    (when rtnall (insert ;; all entries
+			  (org-agenda-finalize-entries rtnall 'agenda)
+			  "\n")))
 	  (put-text-property s (1- (point)) 'day d)
 	  (put-text-property s (1- (point)) 'org-day-cnt day-cnt)))
       (when (and org-agenda-clockreport-mode clocktable-start)
@@ -4778,10 +4781,11 @@ is active."
 				  (and (eq org-agenda-show-inherited-tags t)
 				       (or (eq org-agenda-use-tag-inheritance t)
 					   (memq 'todo org-agenda-use-tag-inheritance))))
-			      tags (org-get-tags nil (not inherited-tags))
+			      tags (org-get-tags
+                                    nil (not inherited-tags) t)
 			      txt (org-agenda-format-item
 				   ""
-				   (buffer-substring-no-properties
+				   (org-buffer-substring-fontified
 				    beg1 (point-at-eol))
 				   level category tags t))
 			(org-add-props txt props
@@ -4815,8 +4819,11 @@ Press `\\[org-agenda-manipulate-query-add]', \
 				 (list 'face 'org-agenda-structure)))
 	  (buffer-string)))
       (org-agenda-mark-header-line (point-min))
-      (when rtnall
-	(insert (org-agenda-finalize-entries rtnall 'search) "\n"))
+      (with-silent-modifications
+        ;; Composition property in entries may be self-destructed
+        ;; on change.  Suppress the self-destruction.
+        (when rtnall
+	  (insert (org-agenda-finalize-entries rtnall 'search) "\n")))
       (goto-char (point-min))
       (or org-agenda-multi (org-agenda-fit-window-to-buffer))
       (add-text-properties (point-min) (point-max)
@@ -4924,8 +4931,11 @@ to search again: (0)[ALL]"))
 	  (add-text-properties pos (1- (point)) (list 'face 'org-agenda-structure))
 	  (buffer-string)))
       (org-agenda-mark-header-line (point-min))
-      (when rtnall
-	(insert (org-agenda-finalize-entries rtnall 'todo) "\n"))
+      (with-silent-modifications
+        ;; Composition property in entries may be self-destructed
+        ;; on change.  Suppress the self-destruction.
+        (when rtnall
+	  (insert (org-agenda-finalize-entries rtnall 'todo) "\n")))
       (goto-char (point-min))
       (or org-agenda-multi (org-agenda-fit-window-to-buffer))
       (add-text-properties (point-min) (point-max)
@@ -5001,7 +5011,9 @@ The prefix arg TODO-ONLY limits the search to TODO entries."
 		    (widen))
 		  (setq rtn (org-scan-tags 'agenda
 					   matcher
-					   org--matcher-tags-todo-only))
+					   org--matcher-tags-todo-only
+                                           nil
+                                           'fontify))
 		  (setq rtnall (append rtnall rtn))))))))
       (org-agenda--insert-overriding-header
         (with-temp-buffer
@@ -5023,8 +5035,11 @@ to search again\n")))
 			       (list 'face 'org-agenda-structure))
 	  (buffer-string)))
       (org-agenda-mark-header-line (point-min))
-      (when rtnall
-	(insert (org-agenda-finalize-entries rtnall 'tags) "\n"))
+      (with-silent-modifications
+        ;; Composition property in entries may be self-destructed
+        ;; on change.  Suppress the self-destruction.
+        (when rtnall
+	  (insert (org-agenda-finalize-entries rtnall 'tags) "\n")))
       (goto-char (point-min))
       (or org-agenda-multi (org-agenda-fit-window-to-buffer))
       (add-text-properties
@@ -5562,7 +5577,8 @@ and the timestamp type relevant for the sorting strategy in
 	      ts-date-pair (org-agenda-entry-get-agenda-timestamp (point))
 	      ts-date (car ts-date-pair)
 	      ts-date-type (cdr ts-date-pair)
-	      txt (org-trim (buffer-substring (match-beginning 2) (match-end 0)))
+	      txt (org-trim (org-buffer-substring-fontified
+                             (match-beginning 2) (match-end 0)))
 	      inherited-tags
 	      (or (eq org-agenda-show-inherited-tags 'always)
 		  (and (listp org-agenda-show-inherited-tags)
@@ -5570,7 +5586,7 @@ and the timestamp type relevant for the sorting strategy in
 		  (and (eq org-agenda-show-inherited-tags t)
 		       (or (eq org-agenda-use-tag-inheritance t)
 			   (memq 'todo org-agenda-use-tag-inheritance))))
-	      tags (org-get-tags nil (not inherited-tags))
+	      tags (org-get-tags nil (not inherited-tags) t)
 	      level (make-string (org-reduced-level (org-outline-level)) ? )
 	      txt (org-agenda-format-item "" txt level category tags t)
 	      priority (1+ (org-get-priority txt)))
@@ -5787,10 +5803,10 @@ displayed in agenda view."
 			     (or (eq org-agenda-use-tag-inheritance t)
 				 (memq 'agenda
 				       org-agenda-use-tag-inheritance)))))
-		   (tags (org-get-tags nil (not inherited-tags)))
+		   (tags (org-get-tags nil (not inherited-tags) t))
 		   (level (make-string (org-reduced-level (org-outline-level))
 				       ?\s))
-		   (head (and (looking-at "\\*+[ \t]+\\(.*\\)")
+		   (head (and (org-looking-at-fontified "\\*+[ \t]+\\(.*\\)")
 			      (match-string 1)))
 		   (inactive? (= (char-after pos) ?\[))
 		   (habit? (and (fboundp 'org-is-habit-p) (org-is-habit-p)))
@@ -5839,7 +5855,7 @@ displayed in agenda view."
 	(setq b (point))
 	(forward-sexp 1)
 	(setq sexp (buffer-substring b (point)))
-	(setq sexp-entry (if (looking-at "[ \t]*\\(\\S-.*\\)")
+	(setq sexp-entry (if (org-looking-at-fontified "[ \t]*\\(\\S-.*\\)")
 			     (org-trim (match-string 1))
 			   ""))
 	(setq result (org-diary-sexp-entry sexp sexp-entry date))
@@ -5854,7 +5870,7 @@ displayed in agenda view."
 		    (and (eq org-agenda-show-inherited-tags t)
 			 (or (eq org-agenda-use-tag-inheritance t)
 			     (memq 'agenda org-agenda-use-tag-inheritance))))
-		tags (org-get-tags nil (not inherited-tags))
+		tags (org-get-tags nil (not inherited-tags) t)
 		todo-state (org-get-todo-state)
 		warntime (get-text-property (point) 'org-appt-warntime)
 		extra nil)
@@ -5973,7 +5989,8 @@ then those holidays will be skipped."
 	      clockp (not (or closedp statep))
 	      state (and statep (match-string 2))
 	      category (org-get-category (match-beginning 0))
-	      timestr (buffer-substring (match-beginning 0) (point-at-eol)))
+	      timestr (org-buffer-substring-fontified
+                       (match-beginning 0) (point-at-eol)))
 	(when (string-match "\\]" timestr)
 	  ;; substring should only run to end of time stamp
 	  (setq rest (substring timestr (match-end 0))
@@ -5990,10 +6007,12 @@ then those holidays will be skipped."
 		(cond
 		 ((not org-agenda-log-mode-add-notes) nil)
 		 (statep
-		  (and (looking-at ".*\\\\\n[ \t]*\\([^-\n \t].*?\\)[ \t]*$")
+		  (and (org-looking-at-fontified
+                        ".*\\\\\n[ \t]*\\([^-\n \t].*?\\)[ \t]*$")
 		       (match-string 1)))
 		 (clockp
-		  (and (looking-at ".*\n[ \t]*-[ \t]+\\([^-\n \t].*?\\)[ \t]*$")
+		  (and (org-looking-at-fontified
+                        ".*\n[ \t]*-[ \t]+\\([^-\n \t].*?\\)[ \t]*$")
 		       (match-string 1)))))
 	  (if (not (re-search-backward org-outline-regexp-bol nil t))
 	      (throw :skip nil)
@@ -6006,9 +6025,9 @@ then those holidays will be skipped."
 		      (and (eq org-agenda-show-inherited-tags t)
 			   (or (eq org-agenda-use-tag-inheritance t)
 			       (memq 'todo org-agenda-use-tag-inheritance))))
-		  tags (org-get-tags nil (not inherited-tags))
+		  tags (org-get-tags nil (not inherited-tags) t)
 		  level (make-string (org-reduced-level (org-outline-level)) ? ))
-	    (looking-at "\\*+[ \t]+\\([^\r\n]+\\)")
+	    (org-looking-at-fontified "\\*+[ \t]+\\([^\r\n]+\\)")
 	    (setq txt (match-string 1))
 	    (when extra
 	      (if (string-match "\\([ \t]+\\)\\(:[^ \n\t]*?:\\)[ \t]*$" txt)
@@ -6254,7 +6273,8 @@ specification like [h]h:mm."
 	    (let* ((category (org-get-category))
 		   (level (make-string (org-reduced-level (org-outline-level))
 				       ?\s))
-		   (head (buffer-substring (point) (line-end-position)))
+		   (head (org-buffer-substring-fontified
+                          (point) (line-end-position)))
 		   (inherited-tags
 		    (or (eq org-agenda-show-inherited-tags 'always)
 			(and (listp org-agenda-show-inherited-tags)
@@ -6263,7 +6283,7 @@ specification like [h]h:mm."
 			     (or (eq org-agenda-use-tag-inheritance t)
 				 (memq 'agenda
 				       org-agenda-use-tag-inheritance)))))
-		   (tags (org-get-tags nil (not inherited-tags)))
+		   (tags (org-get-tags nil (not inherited-tags) t))
 		   (time
 		    (cond
 		     ;; No time of day designation if it is only
@@ -6466,10 +6486,11 @@ scheduled items with an hour specification like [h]h:mm."
 			     (or (eq org-agenda-use-tag-inheritance t)
 				 (memq 'agenda
 				       org-agenda-use-tag-inheritance)))))
-		   (tags (org-get-tags nil (not inherited-tags)))
+		   (tags (org-get-tags nil (not inherited-tags) t))
 		   (level (make-string (org-reduced-level (org-outline-level))
 				       ?\s))
-		   (head (buffer-substring (point) (line-end-position)))
+		   (head (org-buffer-substring-fontified
+                          (point) (line-end-position)))
 		   (time
 		    (cond
 		     ;; No time of day designation if it is only a
@@ -6585,7 +6606,7 @@ scheduled items with an hour specification like [h]h:mm."
 				   (memq 'agenda org-agenda-use-tag-inheritance))))
 		      tags (org-get-tags nil (not inherited-tags)))
 		(setq level (make-string (org-reduced-level (org-outline-level)) ? ))
-		(looking-at "\\*+[ \t]+\\(.*\\)")
+		(org-looking-at-fontified "\\*+[ \t]+\\(.*\\)")
 		(setq head (match-string 1))
 		(let ((remove-re
 		       (if org-agenda-remove-timeranges-from-blocks
@@ -7116,10 +7137,11 @@ The optional argument TYPE tells the agenda type."
 	  (when (looking-at (concat "[ \t]*\\.*\\(" re "\\) +"))
 	    (add-text-properties (match-beginning 0) (match-end 1)
 				 (list 'face (org-get-todo-face 1)))
-	    (let ((s (buffer-substring (match-beginning 1) (match-end 1))))
-	      (delete-region (match-beginning 1) (1- (match-end 0)))
-	      (goto-char (match-beginning 1))
-	      (insert (format org-agenda-todo-keyword-format s)))))
+            (let ((s (buffer-substring (match-beginning 1) (match-end 1))))
+              (with-silent-modifications
+	        (setf (buffer-substring  (match-beginning 1)
+                                         (1- (match-end 0)))
+                      (format org-agenda-todo-keyword-format s))))))
       (let ((pl (text-property-any 0 (length x) 'org-heading t x)))
 	(setq re (get-text-property 0 'org-todo-regexp x))
 	(when (and re
@@ -9527,33 +9549,39 @@ If FORCE-TAGS is non-nil, the car of it returns the new tags."
 When optional argument LINE is non-nil, align tags only on the
 current line."
   (let ((inhibit-read-only t)
-	(org-agenda-tags-column (if (eq 'auto org-agenda-tags-column)
-				    (- (window-text-width))
-				  org-agenda-tags-column))
 	(end (and line (line-end-position)))
-	l c)
+	l lp c)
     (save-excursion
       (goto-char (if line (line-beginning-position) (point-min)))
       (while (re-search-forward org-tag-group-re end t)
 	(add-text-properties
 	 (match-beginning 1) (match-end 1)
 	 (list 'face (delq nil (let ((prop (get-text-property
-					    (match-beginning 1) 'face)))
-				 (or (listp prop) (setq prop (list prop)))
-				 (if (memq 'org-tag prop)
-				     prop
-				   (cons 'org-tag prop))))))
-	(setq l (string-width (match-string 1))
-	      c (if (< org-agenda-tags-column 0)
-		    (- (abs org-agenda-tags-column) l)
-		  org-agenda-tags-column))
+					  (match-beginning 1) 'face)))
+			       (or (listp prop) (setq prop (list prop)))
+			       (if (memq 'org-tag prop)
+				   prop
+				 (cons 'org-tag prop))))))
+	(setq l (org-string-width (match-string 1))
+              lp (org-string-width (match-string 1) 'pixel)
+	      c (unless (eq org-agenda-tags-column 'auto)
+                  (if (< org-agenda-tags-column 0)
+		      (- (abs org-agenda-tags-column) l)
+		    org-agenda-tags-column)))
 	(goto-char (match-beginning 1))
 	(delete-region (save-excursion (skip-chars-backward " \t") (point))
 		       (point))
 	(insert (org-add-props
-		    (make-string (max 1 (- c (current-column))) ?\s)
-		    (plist-put (copy-sequence (text-properties-at (point)))
-			       'face nil))))
+                    " "
+		    (copy-sequence (text-properties-at (point)))
+		  'face nil
+                  'display
+                  `(space
+                    .
+                    (:align-to
+                     ,(cond
+                       ((eq org-agenda-tags-column 'auto) `(- right (,lp) 1))
+                       (t `(+ left ,c))))))))
       (goto-char (point-min))
       (org-font-lock-add-tag-faces (point-max)))))
 
